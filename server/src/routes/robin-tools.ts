@@ -3380,7 +3380,7 @@ router.get('/checks/history', async (req: Request, res: Response) => {
 });
 
 router.delete('/checks/history/:id', requireEditor, async (req: Request, res: Response) => {
-  const id = Number.parseInt(req.params.id, 10);
+  const id = Number.parseInt(String(req.params.id), 10);
 
   if (!Number.isFinite(id) || id <= 0) {
     return res.status(400).json({
