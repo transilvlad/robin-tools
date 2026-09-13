@@ -11,7 +11,7 @@ COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.jso
 COPY src ./src
 RUN npm run build
 
-FROM nginx:1.30.3-alpine3.23@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1
+FROM nginx:1.31.2-alpine3.23@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
 
 RUN apk upgrade --no-cache \
     && apk add --no-cache libcap \
