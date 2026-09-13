@@ -1,0 +1,18 @@
+---
+# Create group_vars/robin_tools.vault.yml with ansible-vault and put real
+# values there:
+#
+#   ansible-vault create group_vars/robin_tools.vault.yml
+#
+# Generate long random values with:
+#
+#   openssl rand -base64 48
+
+robin_tools_db_password: "CHANGE_ME_WITH_ANSIBLE_VAULT"
+robin_tools_module_proxy_secret: "CHANGE_ME_WITH_ANSIBLE_VAULT"
+
+# Only used when robin_tools_auth_mode=basic. The plaintext password never
+# reaches the server: env.j2 turns it into a bcrypt hash with Ansible's
+# `password_hash` filter (requires passlib on the control node:
+# `pip install passlib`) and only the hash is written to the remote .env file.
+robin_tools_admin_password: "CHANGE_ME_WITH_ANSIBLE_VAULT"

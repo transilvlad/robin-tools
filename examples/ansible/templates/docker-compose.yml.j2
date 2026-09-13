@@ -1,0 +1,57 @@
+name: robin-tools
+
+services:
+  robin-tools:
+    container_name: "{{ robin_tools_container_name }}"
+    build:
+      context: ./app
+      dockerfile: Dockerfile.standalone
+    restart: unless-stopped
+    ports:
+      - "{{ robin_tools_bind_address }}:{{ robin_tools_local_port }}:3003"
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      DEPLOYMENT_MODE: standalone
+      DB_HOST: "{{ robin_tools_db_container_name }}"
+      DB_PORT: 5432
+      DB_NAME: "{{ robin_tools_db_name }}"
+      DB_USER: "{{ robin_tools_db_user }}"
+      DB_PASSWORD: "${ROBIN_TOOLS_DB_PASSWORD:?ROBIN_TOOLS_DB_PASSWORD is required}"
+      MODULE_PROXY_SECRET: "${ROBIN_TOOLS_MODULE_PROXY_SECRET:?ROBIN_TOOLS_MODULE_PROXY_SECRET is required}"
+      ROBIN_TOOLS_AUTH_MODE: "{{ robin_tools_auth_mode }}"
+      ROBIN_TOOLS_AUTH_USERNAME: "{{ robin_tools_auth_username }}"
+      ROBIN_TOOLS_AUTH_PASSWORD_HASH: "${ROBIN_TOOLS_AUTH_PASSWORD_HASH:-}"
+      ROBIN_PTR_RESOLVERS: "{{ robin_ptr_resolvers }}"
+      ROBIN_TOOLS_ALLOW_PRIVATE_PROBES: "{{ robin_tools_allow_private_probes | ternary('true', 'false') }}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - robin-tools-db
+      - default
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: "{{ robin_tools_db_container_name }}"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "{{ robin_tools_db_name }}"
+      POSTGRES_USER: "{{ robin_tools_db_user }}"
+      POSTGRES_PASSWORD: "${ROBIN_TOOLS_DB_PASSWORD:?ROBIN_TOOLS_DB_PASSWORD is required}"
+    volumes:
+      - robin-tools-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ robin_tools_db_user }} -d {{ robin_tools_db_name }}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - robin-tools-db
+
+networks:
+  robin-tools-db:
+    internal: true
+
+volumes:
+  robin-tools-pgdata:

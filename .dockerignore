@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+doc
+dist
+node_modules
+*.tsbuildinfo
+.tsbuildinfo
+server/dist
+server/node_modules
+npm-debug.log*

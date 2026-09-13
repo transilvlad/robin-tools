@@ -1,0 +1,67 @@
+services:
+  robin-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+    container_name: robin-tools
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 150
+    mem_limit: 512m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    ports:
+      - "${ROBIN_TOOLS_PORT:-3003}:3003"
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      DEPLOYMENT_MODE: standalone
+      DB_HOST: robin-tools-db
+      DB_PORT: 5432
+      DB_NAME: robin_tools
+      DB_USER: robin_tools
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD to a strong password for the bundled Postgres instance}
+      # A random value is fine here: standalone mode has no host to proxy through,
+      # so this secret only guards against something else on the same machine
+      # calling the API with the legacy module-proxy header scheme.
+      MODULE_PROXY_SECRET: ${MODULE_PROXY_SECRET:?Set MODULE_PROXY_SECRET to any long random value}
+      ROBIN_TOOLS_AUTH_MODE: ${ROBIN_TOOLS_AUTH_MODE:-basic}
+      ROBIN_TOOLS_AUTH_USERNAME: ${ROBIN_TOOLS_AUTH_USERNAME:-admin}
+      # Required when ROBIN_TOOLS_AUTH_MODE=basic. Generate with:
+      #   docker run --rm node:26-alpine node -e "console.log(require('bcryptjs').hashSync(process.argv[1], 10))" 'your-password'
+      ROBIN_TOOLS_AUTH_PASSWORD_HASH: ${ROBIN_TOOLS_AUTH_PASSWORD_HASH:-}
+      ROBIN_PTR_RESOLVERS: ${ROBIN_PTR_RESOLVERS:-}
+      ROBIN_TOOLS_ALLOW_PRIVATE_PROBES: ${ROBIN_TOOLS_ALLOW_PRIVATE_PROBES:-false}
+    depends_on:
+      robin-tools-db:
+        condition: service_healthy
+    networks:
+      - robin-tools
+
+  robin-tools-db:
+    image: postgres:18-alpine
+    container_name: robin-tools-db
+    environment:
+      POSTGRES_DB: robin_tools
+      POSTGRES_USER: robin_tools
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD to a strong password for the bundled Postgres instance}
+    volumes:
+      - robin-tools-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U robin_tools -d robin_tools"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - robin-tools
+
+networks:
+  robin-tools:
+
+volumes:
+  robin-tools-db-data:

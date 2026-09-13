@@ -1,0 +1,39 @@
+---
+# Copy this file to group_vars/robin_tools.yml.
+# Keep secrets in group_vars/robin_tools.vault.yml, not in this file.
+
+robin_tools_domain: robin-tools.example.com
+robin_tools_admin_email: admin@example.com
+
+robin_tools_repo_url: https://github.com/transilvlad/robin-tools.git
+robin_tools_repo_version: main
+robin_tools_install_dir: /opt/robin-tools
+robin_tools_release_dir: "{{ robin_tools_install_dir }}/app"
+
+robin_tools_container_name: robin-tools
+robin_tools_db_container_name: robin-tools-db
+robin_tools_local_port: 3003
+robin_tools_bind_address: 127.0.0.1
+
+# basic (recommended): single-user HTTP Basic Auth.
+# none: no login at all — only for a fully trusted/offline deployment.
+robin_tools_auth_mode: basic
+robin_tools_auth_username: admin
+
+robin_tools_db_name: robin_tools
+robin_tools_db_user: robin_tools
+
+# Optional diagnostics tuning.
+robin_ptr_resolvers: ""
+robin_tools_allow_private_probes: false
+
+robin_tools_enable_nginx: true
+robin_tools_enable_letsencrypt: true
+robin_tools_letsencrypt_webroot: /var/www/letsencrypt
+robin_tools_nginx_client_max_body_size: 16m
+
+# Enabling this will set default incoming policy to deny, then allow SSH/HTTP/HTTPS.
+robin_tools_enable_ufw: true
+robin_tools_ufw_allow_ssh: true
+
+robin_tools_systemd_service: true

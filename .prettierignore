@@ -1,0 +1,10 @@
+dist
+dist-standalone
+server/dist
+coverage
+node_modules
+server/node_modules
+package-lock.json
+server/package-lock.json
+*.tsbuildinfo
+.tsbuildinfo

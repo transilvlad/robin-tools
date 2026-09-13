@@ -1,0 +1,311 @@
+---
+- name: Deploy Robin Tools (standalone)
+  hosts: robin_tools
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Load Vault secrets when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/group_vars/robin_tools.vault.yml"
+      no_log: true
+      ignore_errors: true
+
+    - name: Validate supported platform
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "This example playbook targets Debian/Ubuntu hosts."
+
+    - name: Validate public deployment settings
+      ansible.builtin.assert:
+        that:
+          - robin_tools_domain is defined
+          - robin_tools_domain not in ["", "localhost", "robin-tools.example.com"]
+          - robin_tools_admin_email is defined
+          - robin_tools_admin_email not in ["", "admin@example.com"]
+          - robin_tools_auth_mode in ["none", "basic"]
+        fail_msg: "Set a real domain and admin email in group_vars/robin_tools.yml."
+
+    - name: Warn about unauthenticated standalone deployments
+      ansible.builtin.debug:
+        msg: >-
+          robin_tools_auth_mode is "none": Robin Tools will have no login at
+          all. Only use this for a fully trusted, offline, or otherwise
+          non-public deployment.
+      when: robin_tools_auth_mode == "none"
+
+    - name: Validate secret deployment settings
+      ansible.builtin.assert:
+        that:
+          - robin_tools_db_password is defined
+          - robin_tools_module_proxy_secret is defined
+          - robin_tools_db_password | length >= 24
+          - robin_tools_module_proxy_secret | length >= 24
+          - robin_tools_db_password != "CHANGE_ME_WITH_ANSIBLE_VAULT"
+          - robin_tools_module_proxy_secret != "CHANGE_ME_WITH_ANSIBLE_VAULT"
+        fail_msg: "Create group_vars/robin_tools.vault.yml with long random robin_tools_db_password and robin_tools_module_proxy_secret values."
+      no_log: true
+
+    - name: Validate basic-auth password
+      ansible.builtin.assert:
+        that:
+          - robin_tools_admin_password is defined
+          - robin_tools_admin_password | length >= 12
+          - robin_tools_admin_password != "CHANGE_ME_WITH_ANSIBLE_VAULT"
+        fail_msg: "Set a real robin_tools_admin_password (12+ characters) in group_vars/robin_tools.vault.yml."
+      no_log: true
+      when: robin_tools_auth_mode == "basic"
+
+  tasks:
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+        state: present
+        update_cache: true
+
+    - name: Create Docker apt keyring directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    # Ubuntu/Debian's own repos do not reliably ship docker-compose-plugin,
+    # so Docker's official apt repository is used instead for a consistent,
+    # up-to-date Docker Engine + Compose plugin across distributions.
+    - name: Download Docker apt GPG key
+      ansible.builtin.get_url:
+        url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+        force: false
+
+    - name: Add Docker apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}
+          signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/{{ ansible_distribution | lower }}
+          {{ ansible_distribution_release }} stable
+        filename: docker
+        state: present
+        update_cache: true
+
+    - name: Install Docker Engine and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Install Nginx packages
+      ansible.builtin.apt:
+        name:
+          - nginx
+        state: present
+      when: robin_tools_enable_nginx | bool
+
+    - name: Install Let's Encrypt packages
+      ansible.builtin.apt:
+        name:
+          - certbot
+        state: present
+      when: robin_tools_enable_nginx | bool and robin_tools_enable_letsencrypt | bool
+
+    - name: Install UFW package
+      ansible.builtin.apt:
+        name:
+          - ufw
+        state: present
+      when: robin_tools_enable_ufw | bool
+
+    - name: Ensure Docker is running
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create installation directory
+      ansible.builtin.file:
+        path: "{{ robin_tools_install_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Check out Robin Tools
+      ansible.builtin.git:
+        repo: "{{ robin_tools_repo_url }}"
+        dest: "{{ robin_tools_release_dir }}"
+        version: "{{ robin_tools_repo_version }}"
+        update: true
+
+    - name: Render Docker Compose file
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: "{{ robin_tools_install_dir }}/docker-compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Render secret environment file
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: "{{ robin_tools_install_dir }}/.env"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Build and start Robin Tools
+      ansible.builtin.command:
+        cmd: docker compose --env-file .env up -d --build --remove-orphans
+        chdir: "{{ robin_tools_install_dir }}"
+      register: robin_tools_compose_up
+      changed_when: robin_tools_compose_up.rc == 0
+
+    - name: Install systemd unit
+      ansible.builtin.template:
+        src: templates/robin-tools.service.j2
+        dest: /etc/systemd/system/robin-tools.service
+        owner: root
+        group: root
+        mode: "0644"
+      when: robin_tools_systemd_service | bool
+
+    - name: Enable systemd unit
+      ansible.builtin.systemd:
+        name: robin-tools.service
+        enabled: true
+        daemon_reload: true
+      when: robin_tools_systemd_service | bool
+
+    - name: Create Let's Encrypt webroot
+      ansible.builtin.file:
+        path: "{{ robin_tools_letsencrypt_webroot }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: "0755"
+      when: robin_tools_enable_nginx | bool
+
+    - name: Check existing certificate
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ robin_tools_domain }}/fullchain.pem"
+      register: robin_tools_certificate
+      when: robin_tools_enable_nginx | bool and robin_tools_enable_letsencrypt | bool
+
+    - name: Render initial Nginx site
+      ansible.builtin.template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/robin-tools.conf
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        robin_tools_nginx_has_certificate: "{{ robin_tools_certificate.stat.exists | default(false) }}"
+      when: robin_tools_enable_nginx | bool
+
+    - name: Enable Nginx site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/robin-tools.conf
+        dest: /etc/nginx/sites-enabled/robin-tools.conf
+        state: link
+      when: robin_tools_enable_nginx | bool
+
+    - name: Disable default Nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      when: robin_tools_enable_nginx | bool
+
+    - name: Validate Nginx configuration
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+      when: robin_tools_enable_nginx | bool
+
+    - name: Start Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+      when: robin_tools_enable_nginx | bool
+
+    - name: Request Let's Encrypt certificate
+      ansible.builtin.command:
+        cmd: >-
+          certbot certonly --webroot
+          --webroot-path {{ robin_tools_letsencrypt_webroot }}
+          --domain {{ robin_tools_domain }}
+          --email {{ robin_tools_admin_email }}
+          --agree-tos
+          --non-interactive
+      args:
+        creates: "/etc/letsencrypt/live/{{ robin_tools_domain }}/fullchain.pem"
+      when: robin_tools_enable_nginx | bool and robin_tools_enable_letsencrypt | bool
+
+    - name: Recheck certificate
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ robin_tools_domain }}/fullchain.pem"
+      register: robin_tools_certificate_after
+      when: robin_tools_enable_nginx | bool and robin_tools_enable_letsencrypt | bool
+
+    - name: Render final Nginx site
+      ansible.builtin.template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/robin-tools.conf
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        robin_tools_nginx_has_certificate: "{{ robin_tools_certificate_after.stat.exists | default(robin_tools_certificate.stat.exists | default(false)) }}"
+      when: robin_tools_enable_nginx | bool
+
+    - name: Validate final Nginx configuration
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+      when: robin_tools_enable_nginx | bool
+
+    - name: Reload Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      when: robin_tools_enable_nginx | bool
+
+    - name: Allow SSH through UFW
+      ansible.builtin.command:
+        cmd: ufw allow OpenSSH
+      changed_when: false
+      when: robin_tools_enable_ufw | bool and robin_tools_ufw_allow_ssh | bool
+
+    - name: Allow HTTP through UFW
+      ansible.builtin.command:
+        cmd: ufw allow 80/tcp
+      changed_when: false
+      when: robin_tools_enable_ufw | bool and robin_tools_enable_nginx | bool
+
+    - name: Allow HTTPS through UFW
+      ansible.builtin.command:
+        cmd: ufw allow 443/tcp
+      changed_when: false
+      when: robin_tools_enable_ufw | bool and robin_tools_enable_nginx | bool
+
+    - name: Enable UFW with deny incoming policy
+      ansible.builtin.command:
+        cmd: ufw --force default deny incoming
+      changed_when: false
+      when: robin_tools_enable_ufw | bool
+
+    - name: Enable UFW
+      ansible.builtin.command:
+        cmd: ufw --force enable
+      changed_when: false
+      when: robin_tools_enable_ufw | bool

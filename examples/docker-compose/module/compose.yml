@@ -1,0 +1,60 @@
+services:
+  robin-tools-client:
+    build:
+      context: ../../..
+    image: ${ROBIN_TOOLS_CLIENT_IMAGE:-robin-tools-client:production}
+    container_name: ${ROBIN_TOOLS_CLIENT_CONTAINER_NAME:-robin-tools-client}
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 256m
+    cpus: 0.50
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /var/cache/nginx:size=32m,mode=1777
+      - /var/run:size=1m,mode=1777
+    networks:
+      - suite
+
+  robin-tools-server:
+    build:
+      context: ../../..
+      dockerfile: server/Dockerfile
+    image: ${ROBIN_TOOLS_SERVER_IMAGE:-robin-tools-server:production}
+    container_name: ${ROBIN_TOOLS_SERVER_CONTAINER_NAME:-robin-tools-server}
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 150
+    mem_limit: 512m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      DEPLOYMENT_MODE: module
+      DB_HOST: ${ROBIN_TOOLS_DB_HOST:-postgres-backend}
+      DB_PORT: ${ROBIN_TOOLS_DB_PORT:-5432}
+      DB_NAME: ${ROBIN_TOOLS_DB_NAME:-robin}
+      DB_USER: ${ROBIN_TOOLS_DB_USER:-robin}
+      DB_PASSWORD: ${ROBIN_TOOLS_DB_PASSWORD:?Set ROBIN_TOOLS_DB_PASSWORD to the Robin Admin database password}
+      MODULE_PROXY_SECRET: ${ROBIN_TOOLS_MODULE_PROXY_SECRET:?Set ROBIN_TOOLS_MODULE_PROXY_SECRET to match robin-admin's module secret for this module}
+      ROBIN_PTR_RESOLVERS: ${ROBIN_PTR_RESOLVERS:-}
+      ROBIN_TOOLS_ALLOW_PRIVATE_PROBES: ${ROBIN_TOOLS_ALLOW_PRIVATE_PROBES:-false}
+    networks:
+      - suite
+
+networks:
+  suite:
+    external: true
+    name: ${ROBIN_SUITE_NETWORK:-suite_suite}

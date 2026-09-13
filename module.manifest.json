@@ -1,0 +1,57 @@
+{
+  "protocolVersion": "2026-08-18",
+  "slug": "robin-tools",
+  "displayName": "Robin Tools",
+  "description": "DNS and sender diagnostics for Robin Admin operators.",
+  "vendorName": "Robin",
+  "tier": "free",
+  "version": "1.0.0",
+  "minimumRobinAdminVersion": "1.0.0",
+  "remoteScope": "robinTools",
+  "exposedModule": "./RobinToolsApp",
+  "routeSlug": "robin-tools",
+  "iconName": "wrench",
+  "defaultPath": "dns-lookup/a",
+  "services": {
+    "frontend": {
+      "containerName": "robin-tools-client",
+      "image": "ghcr.io/transilvlad/robin-tools:1.0.0",
+      "digest": null,
+      "port": 80,
+      "remoteEntryPath": "/modules/robin-tools/remoteEntry.js",
+      "assetBaseUrl": "http://robin-tools-client:80"
+    },
+    "backend": {
+      "containerName": "robin-tools-server",
+      "image": "ghcr.io/transilvlad/robin-tools-server:1.0.0",
+      "digest": null,
+      "port": 3003,
+      "healthPath": "/health",
+      "backendUrl": "http://robin-tools-server:3003"
+    }
+  },
+  "permissions": [
+    "dns:query",
+    "blocklists:query",
+    "network:probe",
+    "module:settings:write",
+    "module:history:write"
+  ],
+  "environment": {
+    "required": [
+      "MODULE_PROXY_SECRET",
+      "DB_HOST",
+      "DB_PORT",
+      "DB_NAME",
+      "DB_USER",
+      "DB_PASSWORD"
+    ],
+    "optional": [
+      "PORT",
+      "NODE_ENV",
+      "LOG_LEVEL",
+      "ROBIN_PTR_RESOLVERS",
+      "ROBIN_TOOLS_ALLOW_PRIVATE_PROBES"
+    ]
+  }
+}
