@@ -650,8 +650,24 @@ function explainOptionalRecord(
   return positiveExplanation;
 }
 
+function countResultRecords(result: CheckResult): number {
+  return result.records.reduce((total, record) => {
+    if (!record.value) return total;
+    const lines = record.value.split('\n').filter((line) => line.trim().length > 0);
+    return total + (lines.length || 1);
+  }, 0);
+}
+
+// The persisted "summary" column drives the history list's collapsed label. A
+// verdict-only sentence (e.g. "MX records are present.") is identical across
+// every domain with the same outcome, making history entries indistinguishable
+// from one another. Lead with the query (and selector, if any) plus a record
+// count so each entry can be told apart at a glance without expanding it.
 function buildCheckHistorySummary(result: CheckResult): string {
-  return result.summary;
+  const count = countResultRecords(result);
+  const noun = count === 1 ? 'record' : 'records';
+  const label = result.selector ? `${result.targetValue} · ${result.selector}` : result.targetValue;
+  return `${label} (${count} ${noun})`;
 }
 
 async function listHistoryEntries(filters: {
@@ -2605,27 +2621,45 @@ async function runToolCheck(input: {
   const checkedAt = dnsSnapshot.checkedAt.toISOString();
 
   switch (input.toolKind) {
-    case 'mx':
+    case 'mx': {
+      const hasRealMx = dnsSnapshot.mxHosts.length > 0;
+      const status: VerificationStatus = hasRealMx
+        ? 'pass'
+        : dnsSnapshot.hasNullMx
+          ? 'warning'
+          : 'fail';
+      const summary = hasRealMx
+        ? 'MX records are present.'
+        : dnsSnapshot.hasNullMx
+          ? 'This domain publishes a null MX (RFC 7505) and explicitly declines to receive email.'
+          : 'No MX records were found.';
       return {
         toolKind: 'mx',
         targetType: 'domain',
         targetValue: domain,
         selector: null,
-        status: dnsSnapshot.mxHosts.length > 0 ? 'pass' : 'fail',
-        summary:
-          dnsSnapshot.mxHosts.length > 0 ? 'MX records are present.' : 'No MX records were found.',
+        status,
+        summary,
         checkedAt,
         records: [
           {
             key: 'mx',
             label: 'MX hosts',
-            value: dnsSnapshot.mxHosts.length > 0 ? dnsSnapshot.mxHosts.join('\n') : null,
-            ok: dnsSnapshot.mxHosts.length > 0,
-            explanation: explainMxHosts(dnsSnapshot.mxHosts),
+            value: hasRealMx
+              ? dnsSnapshot.mxHosts.join('\n')
+              : dnsSnapshot.hasNullMx
+                ? '. (null MX — RFC 7505)'
+                : null,
+            ok: hasRealMx ? true : dnsSnapshot.hasNullMx ? null : false,
+            explanation: hasRealMx
+              ? explainMxHosts(dnsSnapshot.mxHosts)
+              : dnsSnapshot.hasNullMx
+                ? 'The domain publishes a null MX record (exchange "."), explicitly declaring that it accepts no email.'
+                : explainMxHosts(dnsSnapshot.mxHosts),
           },
         ],
         findings:
-          dnsSnapshot.mxHosts.length > 0
+          hasRealMx || dnsSnapshot.hasNullMx
             ? []
             : [
                 {
@@ -2636,6 +2670,7 @@ async function runToolCheck(input: {
                 },
               ],
       };
+    }
     case 'spf': {
       const focusIpCovered = input.focusIp
         ? ipMatchesSpf(input.focusIp, dnsSnapshot.spfAuthorized)
@@ -2966,7 +3001,7 @@ function buildDomainIssues(
 ): DomainIssue[] {
   const issues: DomainIssue[] = [];
 
-  if (dnsSnapshot.mxHosts.length === 0) {
+  if (dnsSnapshot.mxHosts.length === 0 && !dnsSnapshot.hasNullMx) {
     issues.push({
       severity: 'high',
       code: 'mx_missing',

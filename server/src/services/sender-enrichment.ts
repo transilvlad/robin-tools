@@ -442,6 +442,7 @@ export interface DomainDnsSnapshot {
   dmarcRecord: string | null;
   dkimRecords: Record<string, string>;
   mxHosts: string[];
+  hasNullMx: boolean;
   daneRecords: Record<string, string[]>;
   mtaStsDnsRecord: string | null;
   mtaStsPolicyText: string | null;
@@ -496,12 +497,24 @@ async function resolveTxtByPrefix(name: string, prefix: string): Promise<string 
   return null;
 }
 
-async function resolveMxHosts(domain: string): Promise<string[]> {
+// RFC 7505 "null MX" is a domain's explicit declaration that it accepts no
+// mail at all: a single MX record pointing at the DNS root. Node's resolver
+// normalizes the root name to an empty string, though some resolvers/tools
+// (e.g. `dig`) render it as a literal "." — treat either as the sentinel, and
+// never surface it as if it were a real mail host (probed, counted, etc.).
+const NULL_MX_EXCHANGES = new Set(['', '.']);
+
+async function resolveMxHosts(domain: string): Promise<{ hosts: string[]; hasNullMx: boolean }> {
   try {
     const records = await withTimeout(dns.resolveMx(domain), DNS_TIMEOUT_MS, `MX ${domain}`);
-    return [...new Set(records.map((record) => record.exchange.toLowerCase()))].sort();
+    const exchanges = [...new Set(records.map((record) => record.exchange.toLowerCase()))].sort();
+    const hasNullMx = exchanges.some((exchange) => NULL_MX_EXCHANGES.has(exchange));
+    return {
+      hosts: exchanges.filter((exchange) => !NULL_MX_EXCHANGES.has(exchange)),
+      hasNullMx,
+    };
   } catch {
-    return [];
+    return { hosts: [], hasNullMx: false };
   }
 }
 
@@ -652,7 +665,7 @@ export async function getDomainDnsRecords(domain: string): Promise<DomainDnsSnap
     spfFlat,
     spfTxt,
     dmarcTxt,
-    mxHosts,
+    mxResolution,
     mtaStsDnsRecord,
     tlsRptRecord,
     bimiRecord,
@@ -681,8 +694,10 @@ export async function getDomainDnsRecords(domain: string): Promise<DomainDnsSnap
     if (r.txt) dkimRecords[r.sel] = r.txt;
   }
 
+  const { hosts: mxHosts, hasNullMx } = mxResolution as { hosts: string[]; hasNullMx: boolean };
+
   const daneEntries = await Promise.all(
-    (mxHosts as string[]).map(async (mxHost) => [mxHost, await resolveTlsaRecords(mxHost)] as const)
+    mxHosts.map(async (mxHost) => [mxHost, await resolveTlsaRecords(mxHost)] as const)
   );
   const daneRecords = Object.fromEntries(daneEntries.filter(([, records]) => records.length > 0));
 
@@ -692,7 +707,8 @@ export async function getDomainDnsRecords(domain: string): Promise<DomainDnsSnap
     spfPermerror: spfFlat.permerror,
     dmarcRecord: dmarcTxt,
     dkimRecords,
-    mxHosts: mxHosts as string[],
+    mxHosts,
+    hasNullMx,
     daneRecords,
     mtaStsDnsRecord,
     mtaStsPolicyText,

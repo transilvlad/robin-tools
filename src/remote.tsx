@@ -50,7 +50,6 @@ import {
   loadLocalHistory,
   mergeHistory,
   migrateToolInput,
-  normalizeStoredToolKey,
   providerLines,
   providersFromLines,
   saveLocalHistory,
@@ -228,13 +227,16 @@ export function ModulePage({
     if (toolDefinition.target === 'ip') setToolIpInput(target);
     const selector = toolKey === 'dkim' ? migrateToolInput(toolKey, 'selector') : '';
     setToolSelectorInput(selector);
-    const visibleHistory = target
-      ? localHistory.filter((entry) =>
+    // Show every locally known entry for this tool (not just the current
+    // target) as an instant placeholder; the network-fetch effect refreshes
+    // this with the merged server+local list moments later.
+    setToolHistory(localHistory);
+    const match = target
+      ? localHistory.find((entry) =>
           historyMatchesTarget(entry, toolDefinition.target, target, selector)
         )
-      : localHistory;
-    setToolHistory(visibleHistory);
-    setToolResult(visibleHistory[0]?.result ?? null);
+      : undefined;
+    setToolResult(match?.result ?? null);
   }, [toolDefinition.target, toolKey]);
 
   useEffect(() => {
@@ -431,70 +433,98 @@ export function ModulePage({
       };
     }
 
-    // DNS tools: filter by target
+    // DNS tools: the "Recent checks" list always shows every recent entry for
+    // this tool, regardless of what's currently typed in the input. It used
+    // to be scoped to the current target, which meant checking a second
+    // domain made the first domain's entry appear to vanish from history
+    // (it was still saved, just filtered out of view). Matching entries for
+    // the current input are picked out of this list separately, below.
+    const controller = new AbortController();
+    setHistoryLoading(true);
+    const params = new URLSearchParams({
+      toolKind: toolKey,
+      limit: String(HISTORY_LIMIT),
+    });
+
+    fetchModuleJson<{ items: CheckHistoryEntry[] }>(`/checks/recent?${params.toString()}`, {
+      signal: controller.signal,
+    })
+      .then((payload) => {
+        if (!controller.signal.aborted) {
+          const merged = mergeHistory(payload.items, loadLocalHistory(toolKey));
+          setToolHistory(merged);
+          saveLocalHistory(toolKey, merged);
+        }
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          setError((err as Error).message || 'Failed to load check history');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchModuleJson is stable per apiBasePath/standalone
+  }, [toolKey]);
+
+  useEffect(() => {
+    // Multi-target/freeform tools never auto-populate a "current result" from
+    // history — only DNS-target tools derive it from the currently typed
+    // target/selector, matched against whatever history is already loaded.
+    const useRecentOnly =
+      toolKey === 'rbl' ||
+      toolKey === 'dbl' ||
+      toolKey === 'message-analysis' ||
+      toolKey === 'mail-server-test';
+    if (isTransformKey(toolKey) || toolKey === 'reputation-providers' || useRecentOnly) {
+      return;
+    }
+
     const targetType = toolDefinition.target;
     const targetValue =
       targetType === 'domain' ? toolDomainInput.trim().toLowerCase() : toolIpInput.trim();
     const selector = toolKey === 'dkim' ? toolSelectorInput.trim().toLowerCase() : '';
 
     if (!targetValue) {
-      setToolHistory([]);
       setToolResult(null);
-      setHistoryLoading(false);
       return;
     }
 
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setHistoryLoading(true);
-      const params = new URLSearchParams({
-        toolKind: toolKey,
-        targetType,
-        targetValue,
-        limit: String(HISTORY_LIMIT),
-      });
-      if (toolKey === 'dkim' && selector) {
-        params.set('selector', selector);
-      }
+    const normalize = (value: string) =>
+      targetType === 'domain' ? value.trim().toLowerCase() : value.trim();
+    const matchesCurrent = (result: CheckResult | null) =>
+      Boolean(
+        result &&
+        result.targetType === targetType &&
+        normalize(result.targetValue) === normalize(targetValue) &&
+        (result.selector ?? '').trim().toLowerCase() === selector.trim().toLowerCase()
+      );
 
-      fetchModuleJson<{ items: CheckHistoryEntry[] }>(`/checks/history?${params.toString()}`, {
-        signal: controller.signal,
-      })
-        .then((payload) => {
-          if (!controller.signal.aborted) {
-            const stored = loadLocalHistory(toolKey);
-            const remote = payload.items.filter(
-              (entry) => normalizeStoredToolKey(entry.toolKind) === toolKey
-            );
-            const visible = mergeHistory(
-              remote,
-              stored.filter((entry) =>
-                historyMatchesTarget(entry, targetType, targetValue, selector)
-              )
-            );
-            setToolHistory(visible);
-            setToolResult(visible[0]?.result ?? null);
-            saveLocalHistory(toolKey, mergeHistory(remote, stored));
-          }
-        })
-        .catch((err) => {
-          if (!controller.signal.aborted) {
-            setError((err as Error).message || 'Failed to load check history');
-          }
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) {
-            setHistoryLoading(false);
-          }
-        });
-    }, 300);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchModuleJson is stable per apiBasePath/standalone
-  }, [toolDefinition.target, toolDomainInput, toolIpInput, toolKey, toolSelectorInput]);
+    // A freshly run check (or a result already restored for this exact
+    // target/selector) is authoritative — don't let a subsequent history
+    // refresh (e.g. the recent-checks fetch resolving) clobber it with a
+    // possibly different copy of the same entry.
+    setToolResult((current) => {
+      if (matchesCurrent(current)) return current;
+      const match = toolHistory.find((entry) =>
+        historyMatchesTarget(entry, targetType, targetValue, selector)
+      );
+      return match?.result ?? null;
+    });
+  }, [
+    toolDefinition.target,
+    toolDomainInput,
+    toolIpInput,
+    toolKey,
+    toolSelectorInput,
+    toolHistory,
+  ]);
 
   async function runTool() {
     if (!canEdit) {
@@ -817,7 +847,7 @@ export function ModulePage({
     }
 
     if (entries.length === 0) {
-      return <p className="rt-muted">No recent checks for this target yet.</p>;
+      return <p className="rt-muted">No recent checks yet.</p>;
     }
 
     return (
