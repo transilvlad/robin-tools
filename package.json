@@ -21,7 +21,7 @@
     "format:check": "node ./node_modules/prettier/bin/prettier.cjs --check \"src/**/*.{ts,tsx}\" \"*.{js,ts}\""
   },
   "dependencies": {
-    "lucide-react": "^1.45.0",
+    "lucide-react": "^1.46.0",
     "pako": "^3.0.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
