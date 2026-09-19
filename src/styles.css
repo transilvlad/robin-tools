@@ -86,29 +86,27 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  padding: 8px 4px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--ra-text-subtle);
   font: inherit;
   cursor: pointer;
   transition:
-    background-color 0.15s ease,
     color 0.15s ease,
     border-color 0.15s ease;
 }
 
 .rt-standalone-nav-item:hover {
-  background: var(--ra-surface-hover);
   color: var(--ra-text);
 }
 
 .rt-standalone-nav-item-active,
 .rt-standalone-nav-item-active:hover {
-  background: var(--ra-accent-soft);
-  color: var(--ra-accent-hover);
-  border-color: var(--ra-accent);
+  color: var(--ra-accent);
+  border-bottom-color: var(--ra-accent);
 }
 
 .rt-standalone-nav-item:focus-visible {
@@ -142,8 +140,6 @@ body {
   --rt-accent-contrast: var(--ra-accent-contrast, #111827);
   --rt-accent-soft: var(--ra-accent-soft, rgba(254, 133, 2, 0.12));
   --rt-card-border: rgba(229, 231, 235, 0.6);
-  --rt-top-tab-bg: #e5e7eb;
-  --rt-top-tab-hover: #d1d5db;
   --rt-verified-bg: var(--ra-success-soft, #ecfdf5);
   --rt-verified-text: var(--ra-success, #166534);
   color: var(--rt-text);
@@ -155,8 +151,6 @@ body {
   --rt-line: var(--ra-border, #3f3f46);
   --rt-inspector-label: var(--ra-text-muted, #d1d5db);
   --rt-inspector-value: var(--ra-text, #f9fafb);
-  --rt-top-tab-bg: var(--ra-surface-2, #424146);
-  --rt-top-tab-hover: var(--ra-surface-hover, #555555);
 }
 
 .rt-shell *,
@@ -491,8 +485,9 @@ body {
 .rt-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 16px;
+  border-bottom: 1px solid var(--rt-border);
 }
 
 .rt-tab {
@@ -502,22 +497,24 @@ body {
   justify-content: center;
   gap: 8px;
   border: 0;
-  border-radius: var(--ra-radius, 4px);
-  background: var(--rt-top-tab-bg);
-  color: var(--ra-text, #111827);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--rt-muted);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
-  padding: 8px 14px;
+  padding: 8px 4px;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .rt-tab-active {
-  background: var(--rt-accent);
-  color: var(--rt-accent-contrast);
+  border-bottom-color: var(--rt-accent);
+  color: var(--rt-accent);
 }
 
 .rt-tab:not(.rt-tab-active):hover {
-  background: var(--rt-top-tab-hover);
+  color: var(--rt-text);
 }
 
 .rt-list-row {
