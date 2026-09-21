@@ -4,7 +4,7 @@
 # which also serves the pre-built frontend directly (no nginx, no separate
 # host proxy, no module federation). See docs/standalone.md.
 
-FROM node:26.8-alpine3.23@sha256:a3024faf41c40992531ecfb00604384665be870a44626afaf181c6d583f89296 AS frontend-build
+FROM node:26.9-alpine3.23@sha256:9dac39bfd053b458593c44a099d2667994c8fa9e1a8c10bc7ff2f3d97b62412d AS frontend-build
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY index.html vite.config.ts vite.config.standalone.ts tsconfig.json tsconfig.
 COPY src ./src
 RUN npm run build:standalone
 
-FROM node:26.8-alpine3.23@sha256:a3024faf41c40992531ecfb00604384665be870a44626afaf181c6d583f89296 AS backend-build
+FROM node:26.9-alpine3.23@sha256:9dac39bfd053b458593c44a099d2667994c8fa9e1a8c10bc7ff2f3d97b62412d AS backend-build
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ COPY server/src ./src
 RUN npm run build \
     && npm prune --omit=dev
 
-FROM node:26.8-alpine3.23@sha256:a3024faf41c40992531ecfb00604384665be870a44626afaf181c6d583f89296
+FROM node:26.9-alpine3.23@sha256:9dac39bfd053b458593c44a099d2667994c8fa9e1a8c10bc7ff2f3d97b62412d
 
 ENV NODE_ENV=production
 ENV DEPLOYMENT_MODE=standalone
