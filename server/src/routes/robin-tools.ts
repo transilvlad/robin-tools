@@ -2,6 +2,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import tls from 'node:tls';
 import { Router, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import ipaddr from 'ipaddr.js';
 import { config as runtimeConfig } from '../config.js';
 import { query } from '../db/connection.js';
@@ -19,8 +20,21 @@ import { publicProbeAddresses } from '../services/network-safety.js';
 import { resolveDnssecRecordCounts } from '../services/dns-records.js';
 
 const router = Router();
+const ROUTER_RATE_LIMIT_WINDOW_MS = 60_000;
+const ROUTER_RATE_LIMIT_MAX_REQUESTS = 300;
 
-router.use(requireAuth);
+const routerRateLimiter = rateLimit({
+  windowMs: ROUTER_RATE_LIMIT_WINDOW_MS,
+  limit: ROUTER_RATE_LIMIT_MAX_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many Robin Tools requests. Try again shortly.',
+  },
+});
+
+router.use(routerRateLimiter, requireAuth);
 router.use(requireViewer);
 
 class ValidationError extends Error {}
@@ -189,12 +203,14 @@ type BlocklistHit = {
   disputed: boolean;
 };
 
+type HeaderMap = Map<string, string[]>;
+
 type ParsedMessageInput = {
   inputKind: 'domain' | 'email' | 'headers' | 'raw';
   value: string;
   domain: string | null;
   email: string | null;
-  headers: Record<string, string[]>;
+  headers: HeaderMap;
   rawHeaders: string;
   domains: string[];
   ips: string[];
@@ -1137,12 +1153,30 @@ function splitHeaders(raw: string): string {
   );
 }
 
-function parseHeaderMap(rawHeaders: string): Record<string, string[]> {
-  const headers: Record<string, string[]> = {};
+function isSafeHeaderName(name: string): boolean {
+  if (!name || name === '__proto__' || name === 'constructor' || name === 'prototype') {
+    return false;
+  }
+  for (let index = 0; index < name.length; index += 1) {
+    const code = name.charCodeAt(index);
+    const isTokenChar =
+      (code >= 65 && code <= 90) ||
+      (code >= 97 && code <= 122) ||
+      (code >= 48 && code <= 57) ||
+      "!#$%&'*+-.^_`|~".includes(name[index]);
+    if (!isTokenChar) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function parseHeaderMap(rawHeaders: string): HeaderMap {
+  const headers: HeaderMap = new Map();
   let currentName: string | null = null;
   for (const line of rawHeaders.split('\n')) {
-    if (/^\s/.test(line) && currentName) {
-      const values = headers[currentName] ?? [];
+    if ((line.startsWith(' ') || line.startsWith('\t')) && currentName) {
+      const values = headers.get(currentName) ?? [];
       values[values.length - 1] = `${values[values.length - 1]} ${line.trim()}`;
       continue;
     }
@@ -1151,20 +1185,80 @@ function parseHeaderMap(rawHeaders: string): Record<string, string[]> {
       currentName = null;
       continue;
     }
-    currentName = line.slice(0, separator).trim().toLowerCase();
-    headers[currentName] = [...(headers[currentName] ?? []), line.slice(separator + 1).trim()];
+    const name = line.slice(0, separator).trim().toLowerCase();
+    if (!isSafeHeaderName(name)) {
+      currentName = null;
+      continue;
+    }
+    currentName = name;
+    headers.set(currentName, [
+      ...(headers.get(currentName) ?? []),
+      line.slice(separator + 1).trim(),
+    ]);
   }
   return headers;
 }
 
-function firstHeader(headers: Record<string, string[]>, name: string): string | null {
-  return headers[name.toLowerCase()]?.[0] ?? null;
+function firstHeader(headers: HeaderMap, name: string): string | null {
+  return headers.get(name.toLowerCase())?.[0] ?? null;
+}
+
+function isEmailLocalPartChar(value: string): boolean {
+  const code = value.charCodeAt(0);
+  return (
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    (code >= 48 && code <= 57) ||
+    ".!#$%&'*+/=?^_`{|}~-".includes(value)
+  );
+}
+
+function isValidEmailLocalPart(value: string): boolean {
+  if (!value || value.startsWith('.') || value.endsWith('.') || value.includes('..')) {
+    return false;
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    if (!isEmailLocalPartChar(value[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function emailCandidateTokens(value: string): string[] {
+  const tokens: string[] = [];
+  let start: number | null = null;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const isCandidateChar = isEmailLocalPartChar(char) || char === '@';
+    if (isCandidateChar && start === null) {
+      start = index;
+    } else if (!isCandidateChar && start !== null) {
+      tokens.push(value.slice(start, index));
+      start = null;
+    }
+  }
+  if (start !== null) {
+    tokens.push(value.slice(start));
+  }
+  return tokens;
 }
 
 function extractEmails(value: string): string[] {
-  return [...value.matchAll(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@([a-z0-9-]+\.)+[a-z]{2,}/gi)].map(
-    (match) => match[0].toLowerCase()
-  );
+  const emails = new Set<string>();
+  for (const token of emailCandidateTokens(value)) {
+    const atIndex = token.indexOf('@');
+    if (atIndex <= 0 || atIndex !== token.lastIndexOf('@')) {
+      continue;
+    }
+
+    const local = token.slice(0, atIndex);
+    const domain = parseDomain(token.slice(atIndex + 1));
+    if (domain && isValidEmailLocalPart(local)) {
+      emails.add(`${local.toLowerCase()}@${domain}`);
+    }
+  }
+  return [...emails];
 }
 
 function domainFromEmailValue(value: string | null): string | null {
@@ -1211,9 +1305,9 @@ function extractIps(value: string): string[] {
 }
 
 function parseDkimSignatures(
-  headers: Record<string, string[]>
+  headers: HeaderMap
 ): Array<{ selector: string; domain: string; algorithm: string | null }> {
-  return (headers['dkim-signature'] ?? [])
+  return (headers.get('dkim-signature') ?? [])
     .map((value) => {
       const tags = new Map(
         value.split(';').map((part) => {
@@ -1236,7 +1330,7 @@ function parseMessageInput(
 ): ParsedMessageInput {
   const trimmed = value.trim().slice(0, MAX_ANALYSIS_INPUT_CHARS);
   const rawHeaders = inputKind === 'domain' || inputKind === 'email' ? '' : splitHeaders(trimmed);
-  const headers = rawHeaders ? parseHeaderMap(rawHeaders) : {};
+  const headers = rawHeaders ? parseHeaderMap(rawHeaders) : new Map<string, string[]>();
   const email =
     inputKind === 'email'
       ? (extractEmails(trimmed)[0] ?? null)
@@ -1286,7 +1380,7 @@ function messageHeaderFindings(parsed: ParsedMessageInput): DomainIssue[] {
     }
   }
   if (
-    (parsed.headers['list-id'] || parsed.headers['list-unsubscribe']) &&
+    (parsed.headers.has('list-id') || parsed.headers.has('list-unsubscribe')) &&
     !firstHeader(parsed.headers, 'list-unsubscribe')
   ) {
     findings.push({

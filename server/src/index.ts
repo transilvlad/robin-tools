@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +15,18 @@ import {
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const STATIC_FALLBACK_RATE_LIMIT_WINDOW_MS = 60_000;
+const STATIC_FALLBACK_RATE_LIMIT_MAX_REQUESTS = 300;
+const staticFallbackRateLimiter = rateLimit({
+  windowMs: STATIC_FALLBACK_RATE_LIMIT_WINDOW_MS,
+  limit: STATIC_FALLBACK_RATE_LIMIT_MAX_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many Robin Tools requests. Try again shortly.',
+  },
+});
 
 function assertProductionSecrets() {
   if (config.nodeEnv !== 'production') {
@@ -100,7 +113,7 @@ if (config.deploymentMode === 'standalone') {
   const staticDir = process.env.STATIC_DIR ?? path.join(currentDir, '../public');
   if (fs.existsSync(staticDir)) {
     app.use(express.static(staticDir, { index: false }));
-    app.get('*', (_req, res) => {
+    app.get('*', staticFallbackRateLimiter, (_req, res) => {
       res.sendFile(path.join(staticDir, 'index.html'));
     });
   } else {

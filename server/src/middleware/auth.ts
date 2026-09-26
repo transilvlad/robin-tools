@@ -109,16 +109,22 @@ function requireStandaloneAuth(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  const header = req.header('authorization') ?? '';
-  const match = /^Basic\s+(.+)$/i.exec(header.trim());
-  if (!match) {
+  const header = (req.header('authorization') ?? '').trim();
+  const schemeEnd = header.indexOf(' ');
+  if (schemeEnd <= 0 || header.slice(0, schemeEnd).toLowerCase() !== 'basic') {
+    unauthorized();
+    return;
+  }
+
+  const encodedCredentials = header.slice(schemeEnd + 1).trimStart();
+  if (!encodedCredentials) {
     unauthorized();
     return;
   }
 
   let decoded: string;
   try {
-    decoded = Buffer.from(match[1], 'base64').toString('utf8');
+    decoded = Buffer.from(encodedCredentials, 'base64').toString('utf8');
   } catch {
     unauthorized();
     return;
