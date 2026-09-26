@@ -4,6 +4,8 @@ FROM node:26.9-alpine3.23@sha256:9dac39bfd053b458593c44a099d2667994c8fa9e1a8c10b
 
 WORKDIR /app
 
+RUN apk add --no-cache "libexpat>=2.8.5-r0"
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -14,7 +16,7 @@ RUN npm run build
 FROM nginx:1.31.2-alpine3.23@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
 
 RUN apk upgrade --no-cache \
-    && apk add --no-cache libcap \
+    && apk add --no-cache "libexpat>=2.8.5-r0" libcap \
     && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx \
     && touch /run/nginx.pid \
     && chown -R nginx:nginx /var/cache/nginx /run/nginx.pid /etc/nginx/conf.d

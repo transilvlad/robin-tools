@@ -4,6 +4,8 @@ FROM node:26.9-alpine3.23@sha256:9dac39bfd053b458593c44a099d2667994c8fa9e1a8c10b
 
 WORKDIR /app
 
+RUN apk add --no-cache "libexpat>=2.8.5-r0"
+
 COPY server/package*.json ./
 RUN npm ci
 
@@ -18,6 +20,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 RUN apk upgrade --no-cache \
+    && apk add --no-cache "libexpat>=2.8.5-r0" \
     && rm -rf /usr/local/lib/node_modules/npm \
     /usr/local/bin/npm \
     /usr/local/bin/npx
