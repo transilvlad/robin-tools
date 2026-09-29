@@ -12,6 +12,39 @@
   "routeSlug": "robin-tools",
   "iconName": "wrench",
   "defaultPath": "dns-lookup/a",
+  "moduleDefinition": {
+    "name": "robin-tools",
+    "title": "Robin Tools",
+    "description": "DNS, mail posture, and diagnostics tools for deliverability operators.",
+    "defaultPath": "dns-lookup/a",
+    "navigation": [
+      {
+        "label": "DNS Lookup",
+        "iconName": "search",
+        "path": "dns-lookup"
+      },
+      {
+        "label": "Mail Posture",
+        "iconName": "mail",
+        "path": "mail-posture"
+      },
+      {
+        "label": "Reputation",
+        "iconName": "shield-check",
+        "path": "reputation"
+      },
+      {
+        "label": "Mail Tests",
+        "iconName": "wrench",
+        "path": "mail-tests"
+      },
+      {
+        "label": "Transforms",
+        "iconName": "file-code",
+        "path": "transforms"
+      }
+    ]
+  },
   "services": {
     "frontend": {
       "containerName": "robin-tools-client",
