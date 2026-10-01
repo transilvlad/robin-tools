@@ -557,7 +557,7 @@ describe('tool-key persistence and migration', () => {
     await waitFor(() =>
       expect(window.localStorage.getItem('robin-tools:tool:mx:history')).toBe('[]')
     );
-    expect(screen.queryByText('Complete')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('Complete')).toBeNull());
   });
 
   it('ignores a malformed tool entry while preserving valid unrelated legacy history', async () => {
