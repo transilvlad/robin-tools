@@ -48,7 +48,7 @@
   "services": {
     "frontend": {
       "containerName": "robin-tools-client",
-      "image": "ghcr.io/transilvlad/robin-tools:1.0.1",
+      "image": "ghcr.io/transilvlad/robin-tools:1.0.2",
       "digest": null,
       "port": 80,
       "remoteEntryPath": "/modules/robin-tools/remoteEntry.js",
@@ -56,7 +56,7 @@
     },
     "backend": {
       "containerName": "robin-tools-server",
-      "image": "ghcr.io/transilvlad/robin-tools-server:1.0.1",
+      "image": "ghcr.io/transilvlad/robin-tools-server:1.0.2",
       "digest": null,
       "port": 3003,
       "healthPath": "/health",
