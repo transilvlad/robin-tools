@@ -40,7 +40,8 @@ SMTP/IMAP/POP3 port probing) that can run in two modes:
 
 - **Module mode**: a backend service reached only through an authenticated
   proxy in the sibling [Robin Admin](https://github.com/transilvlad/robin-admin)
-  project, using a shared `MODULE_PROXY_SECRET`.
+  project, using a per-module `MODULE_PROXY_SECRET` and a request-bound Ed25519
+  identity assertion verified against operator-pinned Admin public keys.
 - **Standalone mode**: a self-contained deployment with its own bundled
   PostgreSQL database and single-user login (HTTP Basic Auth, or no auth for
   trusted/offline use only). See the "Deployment modes" section of the
@@ -52,7 +53,7 @@ Reports involving any of the following are especially welcome:
   POP3 target this module resolves or connects to, including redirect
   handling and the private/public address validation in
   `server/src/services/network-safety.ts`
-- Bypassing the module-proxy authentication (`x-robin-module-secret`), the
+- Bypassing the module-proxy secret or signed identity authentication, the
   standalone-mode HTTP Basic Auth, or the viewer/editor/admin role checks in
   `server/src/middleware/`
 - Resource exhaustion via the blocklist, bulk-check, or message-analysis

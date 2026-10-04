@@ -3,11 +3,24 @@ import test, { after, before, mock } from 'node:test';
 import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { SignJWT, exportJWK } from 'jose';
+import {
+  bodyDigest,
+  identityHeadersDigest,
+  captureIdentityBody,
+  IDENTITY_TYPE,
+} from '../services/module-identity-protocol.js';
 
 // Module mocking must happen before the router (and anything it imports) is
 // loaded, so these env vars and mock.module() calls run first.
 process.env.MODULE_PROXY_SECRET = 'test-secret';
 process.env.NODE_ENV = 'test';
+const pair = generateKeyPairSync('ed25519');
+process.env.ROBIN_ADMIN_IDENTITY_TRUST_JSON = JSON.stringify({
+  issuer: 'urn:test:admin',
+  keys: [{ ...(await exportJWK(pair.publicKey)), kid: 'test' }],
+});
 
 mock.module('../db/connection.js', {
   namedExports: {
@@ -22,7 +35,7 @@ let baseUrl: string;
 
 before(async () => {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ verify: captureIdentityBody }));
   app.use('/', robinToolsRouter);
   server = app.listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
@@ -36,7 +49,14 @@ after(async () => {
 
 type Role = 'viewer' | 'editor' | 'admin' | null;
 
-function authHeaders(role: Role, adminId: string, includeSecret: boolean): Record<string, string> {
+async function authHeaders(
+  role: Role,
+  adminId: string,
+  includeSecret: boolean,
+  method: string,
+  target: string,
+  body: string
+): Promise<Record<string, string>> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (includeSecret) {
     headers['x-robin-module-secret'] = 'test-secret';
@@ -44,6 +64,28 @@ function authHeaders(role: Role, adminId: string, includeSecret: boolean): Recor
   if (role) {
     headers['x-robin-admin-role'] = role;
     headers['x-robin-admin-id'] = adminId;
+    const issuedAtMs = Date.now();
+    const iat = Math.floor(issuedAtMs / 1000);
+    headers['x-robin-module-identity'] = await new SignJWT({
+      principal: 'admin',
+      sub: 'aee695ef-d8d7-4e15-a27e-e47e9b2b0ce4',
+      adminId: Number(adminId),
+      role,
+      name: 'Fixture',
+      email: 'fixture@example.test',
+      issuedAtMs,
+      method,
+      target,
+      digest: bodyDigest(Buffer.from(body)),
+      headersDigest: identityHeadersDigest((name) => headers[name]),
+    })
+      .setProtectedHeader({ alg: 'EdDSA', typ: IDENTITY_TYPE, kid: 'test' })
+      .setIssuer('urn:test:admin')
+      .setAudience('robin-tools')
+      .setIssuedAt(iat)
+      .setExpirationTime(iat + 30)
+      .setJti(randomUUID())
+      .sign(pair.privateKey);
   }
   return headers;
 }
@@ -57,10 +99,19 @@ async function call(
   // `role: null` (send no role/adminId headers at all) — a `??` fallback
   // would incorrectly turn an explicit null back into 'admin'.
   const role = 'role' in opts ? opts.role! : 'admin';
+  const requestBody =
+    method === 'GET' || method === 'DELETE' ? '' : JSON.stringify(opts.body ?? {});
   const response = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: authHeaders(role, opts.adminId ?? '1', opts.includeSecret ?? true),
-    body: method === 'GET' || method === 'DELETE' ? undefined : JSON.stringify(opts.body ?? {}),
+    headers: await authHeaders(
+      role,
+      opts.adminId ?? '1',
+      opts.includeSecret ?? true,
+      method,
+      path,
+      requestBody
+    ),
+    body: requestBody || undefined,
   });
   const body = await response.json().catch(() => null);
   return { status: response.status, body };

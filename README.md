@@ -4,6 +4,22 @@ Standalone federated module for Robin Admin with its own frontend runtime and ex
 
 ## Local usage
 
+Hosted mode requires both the proxy secret and a request-bound Ed25519 assertion.
+Verified browser identities include immutable `uid`; API keys have separate
+principals and must not inherit creator grants. Unsigned identity headers are
+not authorization credentials. Standalone authentication remains independent.
+
+Start Robin Admin first. Bundled module Compose mounts its public identity volume
+read-only; `ROBIN_ADMIN_IDENTITY_VOLUME` selects another Admin project. Custom
+deployments pin `ROBIN_ADMIN_IDENTITY_TRUST_FILE` or
+`ROBIN_ADMIN_IDENTITY_TRUST_JSON`; modules never receive the private signing key.
+
+See [the host protocol](https://github.com/transilvlad/robin-admin/blob/main/doc/module-protocol.md)
+for claims, upload policies, scoped directory access and lifecycle events.
+The replay cache supports one backend process and synchronized clocks, rejects
+consumed assertions and tokens minted before startup, and requires shared atomic
+storage for replicas. Restart after changing key pins.
+
 ```bash
 npm install
 npm run dev

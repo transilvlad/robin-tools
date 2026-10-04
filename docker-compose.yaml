@@ -46,7 +46,10 @@ services:
       DB_USER: robin
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD to the Robin database password}
       MODULE_PROXY_SECRET: ${MODULE_PROXY_SECRET:?Set MODULE_PROXY_SECRET to match robin-admin}
+      ROBIN_ADMIN_IDENTITY_TRUST_FILE: /run/robin-admin-identity/trust.json
       ROBIN_PTR_RESOLVERS: ${ROBIN_PTR_RESOLVERS:-}
+    volumes:
+      - module_identity_public:/run/robin-admin-identity:ro
     networks:
       - suite
 
@@ -54,3 +57,8 @@ networks:
   suite:
     external: true
     name: suite_suite
+
+volumes:
+  module_identity_public:
+    external: true
+    name: ${ROBIN_ADMIN_IDENTITY_VOLUME:-robin-admin_module_identity_public}

@@ -2,6 +2,11 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { NextFunction, Request, Response } from 'express';
 import { config } from '../config.js';
+import {
+  createIdentityVerifier,
+  identityRequestBody,
+  pinnedIdentityTrust,
+} from '../services/module-identity-protocol.js';
 
 // Constant-time comparison: hashing first guarantees equal-length buffers so
 // timingSafeEqual never short-circuits on a length mismatch, avoiding a
@@ -16,6 +21,7 @@ export type ModuleAdminRole = 'viewer' | 'editor' | 'admin';
 
 export interface ModuleAdminContext {
   adminId: number;
+  uid?: string;
   name: string;
   email: string;
   role: ModuleAdminRole;
@@ -159,7 +165,8 @@ function requireStandaloneAuth(req: Request, res: Response, next: NextFunction):
   next();
 }
 
-function requireModuleAuth(req: Request, res: Response, next: NextFunction): void {
+let verifyIdentity: ReturnType<typeof createIdentityVerifier> | undefined;
+async function requireModuleAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const secret = req.header('x-robin-module-secret');
   if (!secret || !safeSecretEquals(secret, config.proxySecret)) {
     res.status(401).json({
@@ -169,35 +176,34 @@ function requireModuleAuth(req: Request, res: Response, next: NextFunction): voi
     return;
   }
 
-  const role = req.header('x-robin-admin-role');
-  const adminId = Number.parseInt(req.header('x-robin-admin-id') || '0', 10);
-  if (
-    !role ||
-    !['viewer', 'editor', 'admin'].includes(role) ||
-    !Number.isFinite(adminId) ||
-    adminId <= 0
-  ) {
+  try {
+    verifyIdentity ??= createIdentityVerifier(
+      pinnedIdentityTrust(config.moduleIdentityTrust),
+      'robin-tools'
+    );
+    req.moduleAdmin = await verifyIdentity(
+      req.get('x-robin-module-identity') ?? '',
+      req.method,
+      req.originalUrl,
+      identityRequestBody(req),
+      (name) => req.get(name)
+    );
+  } catch {
     res.status(401).json({
       success: false,
-      error: 'Missing admin context',
+      error: 'Invalid signed module identity',
     });
     return;
   }
 
-  req.moduleAdmin = {
-    adminId,
-    name: req.header('x-robin-admin-name') || 'Robin Admin',
-    email: req.header('x-robin-admin-email') || 'unknown@local',
-    role: role as ModuleAdminRole,
-  };
   next();
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (config.deploymentMode === 'standalone') {
     requireStandaloneAuth(req, res, next);
     return;
   }
 
-  requireModuleAuth(req, res, next);
+  await requireModuleAuth(req, res, next);
 }

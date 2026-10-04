@@ -13,6 +13,7 @@ export interface Config {
   nodeEnv: string;
   logLevel: string;
   proxySecret: string;
+  moduleIdentityTrust: string;
   allowPrivateNetworkDiagnostics: boolean;
   deploymentMode: DeploymentMode;
   standaloneAuth: {
@@ -67,6 +68,7 @@ export const config: Config = {
   nodeEnv: getEnv('NODE_ENV', 'production'),
   logLevel: getEnv('LOG_LEVEL', 'info'),
   proxySecret: getEnv('MODULE_PROXY_SECRET', 'dev-secret-change-in-production'),
+  moduleIdentityTrust: getEnv('ROBIN_ADMIN_IDENTITY_TRUST_JSON', ''),
   allowPrivateNetworkDiagnostics: ['1', 'true', 'yes'].includes(
     (process.env.ROBIN_TOOLS_ALLOW_PRIVATE_PROBES ?? '').toLowerCase()
   ),

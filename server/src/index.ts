@@ -1,4 +1,5 @@
 import express from 'express';
+import { captureIdentityBody } from './services/module-identity-protocol.js';
 import rateLimit from 'express-rate-limit';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -56,8 +57,8 @@ function assertProductionSecrets() {
   }
 }
 
-app.use(express.json({ limit: '512kb' }));
-app.use(express.urlencoded({ extended: true, limit: '512kb' }));
+app.use(express.json({ limit: '512kb', verify: captureIdentityBody }));
+app.use(express.urlencoded({ extended: true, limit: '512kb', verify: captureIdentityBody }));
 
 app.use((req, res, next) => {
   const startedAt = performance.now();

@@ -1,6 +1,6 @@
 {
   "name": "robin-tools-server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -19,6 +19,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "ipaddr.js": "^2.3.0",
+    "jose": "^6.2.12",
     "pg": "^8.13.0",
     "psl": "^1.15.0"
   },
