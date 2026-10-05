@@ -20,7 +20,7 @@
     "express-rate-limit": "^8.7.0",
     "ipaddr.js": "^2.3.0",
     "jose": "^6.2.12",
-    "pg": "^8.13.0",
+    "pg": "^8.23.1",
     "psl": "^1.15.0"
   },
   "devDependencies": {
