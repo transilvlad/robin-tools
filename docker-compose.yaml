@@ -1,8 +1,8 @@
 services:
-  robin-tools-client:
+  suite-tools-ui:
     build:
       context: .
-    container_name: robin-tools-client
+    container_name: suite-tools-ui
     read_only: true
     cap_drop:
       - ALL
@@ -18,12 +18,13 @@ services:
       - /var/cache/nginx:size=32m,mode=1777
       - /var/run:size=1m,mode=1777
     networks:
-      - suite
-  robin-tools-server:
+      suite:
+        aliases: [tools-frontend]
+  suite-tools:
     build:
       context: .
       dockerfile: server/Dockerfile
-    container_name: robin-tools-server
+    container_name: suite-tools
     read_only: true
     cap_drop:
       - ALL
@@ -49,9 +50,10 @@ services:
       ROBIN_ADMIN_IDENTITY_TRUST_FILE: /run/robin-admin-identity/trust.json
       ROBIN_PTR_RESOLVERS: ${ROBIN_PTR_RESOLVERS:-}
     volumes:
-      - module_identity_public:/run/robin-admin-identity:ro
+      - suite-admin-module-identity:/run/robin-admin-identity:ro
     networks:
-      - suite
+      suite:
+        aliases: [tools-backend]
 
 networks:
   suite:
@@ -59,6 +61,6 @@ networks:
     name: suite_suite
 
 volumes:
-  module_identity_public:
+  suite-admin-module-identity:
     external: true
-    name: ${ROBIN_ADMIN_IDENTITY_VOLUME:-robin-admin_module_identity_public}
+    name: ${ROBIN_ADMIN_IDENTITY_VOLUME:-suite-admin-module-identity}

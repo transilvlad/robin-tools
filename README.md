@@ -36,12 +36,12 @@ npm run build
 - Default hosted route: `/modules/robin-tools/dns-lookup/a`
 - Default local remote entry: `http://localhost:4175/modules/robin-tools/remoteEntry.js`
 - Docker: `docker compose up --build` starts:
-  - `robin-tools-client` on the shared Docker network (no host port is published; Robin Admin reaches it as `http://robin-tools-client/modules/robin-tools/`)
-  - `robin-tools-server` on the shared Docker network for Robin Admin proxying
+  - `suite-tools-ui` on the shared Docker network as `tools-frontend` (no host port is published; Robin Admin reaches it as `http://tools-frontend/modules/robin-tools/`)
+  - `suite-tools` on the shared Docker network as `tools-backend` for Robin Admin proxying
 
 ## Docker integration
 
-The checked-in `docker-compose.yaml` joins the shared `suite_suite` Docker network so Robin Admin can reach the module as `http://robin-tools-client/modules/robin-tools/remoteEntry.js`.
+The checked-in `docker-compose.yaml` joins the shared `suite_suite` Docker network so Robin Admin can reach the module as `http://tools-frontend/modules/robin-tools/remoteEntry.js`.
 
 Typical local flow:
 
@@ -105,7 +105,7 @@ examples of both deployment modes, see `examples/docker-compose/`.
 
 - Robin Admin hosts the frontend remote inside a Shadow DOM mount so Robin Tools styles stay isolated from the host UI.
 - Browser requests still go to Robin Admin under `/api/modules/robin-tools/*`.
-- Robin Admin authenticates the session, enforces CSRF, and proxies those requests to `robin-tools-server`.
+- Robin Admin authenticates the session, enforces CSRF, and proxies those requests to `tools-backend`.
 
 The frontend needs no environment variables in module mode. Production
 deployments declare `MODULE_PROXY_SECRET`, `DB_HOST`, `DB_PORT`, `DB_NAME`,
