@@ -41,7 +41,7 @@ npm run build
 
 ## Docker integration
 
-The checked-in `docker-compose.yaml` joins the shared `suite_suite` Docker network so Robin Admin can reach the module as `http://tools-frontend/modules/robin-tools/remoteEntry.js`.
+The checked-in `docker-compose.yaml` joins the shared `suite` Docker network so Robin Admin can reach the module as `http://tools-frontend/modules/robin-tools/remoteEntry.js`.
 
 Typical local flow:
 

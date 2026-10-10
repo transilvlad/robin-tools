@@ -57,4 +57,4 @@ services:
 networks:
   suite:
     external: true
-    name: ${ROBIN_SUITE_NETWORK:-suite_suite}
+    name: ${ROBIN_SUITE_NETWORK:-suite}

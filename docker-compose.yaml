@@ -58,7 +58,7 @@ services:
 networks:
   suite:
     external: true
-    name: suite_suite
+    name: suite
 
 volumes:
   suite-admin-module-identity:

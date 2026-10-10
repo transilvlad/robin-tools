@@ -36,7 +36,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-This joins the shared `suite_suite` Docker network (or whichever network name
+This joins the shared `suite` Docker network (or whichever network name
 you set via `ROBIN_SUITE_NETWORK`) so Robin Admin can reach Robin Tools the
 same way it reaches any other module.
 
