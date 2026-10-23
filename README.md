@@ -4,9 +4,11 @@ Standalone federated module for Robin Admin with its own frontend runtime and ex
 
 ## Local usage
 
-Use Node.js 22.23.4+, 24.22.1+, or 26.12.1+ on a supported release line.
+Use Node.js 22.23.4+, 24.22.1+, or 26.12.1+ within the 22.x, 24.x, or 26.x release lines.
 Docker builds and CI use Node.js 26.12.1, which includes the
 [October 2026 security fixes](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+The frontend runtime uses digest-pinned nginx 1.31.8 on Alpine. CI audits both
+production dependencies and development/build tooling.
 
 Hosted mode requires both the proxy secret and a request-bound Ed25519 assertion.
 Verified browser identities include immutable `uid`; API keys have separate

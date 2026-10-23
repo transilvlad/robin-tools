@@ -21,8 +21,8 @@ jobs:
           node-version: 26.12.1
           cache: npm
       - run: npm ci
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit dependencies including build tooling
+        run: npm audit --audit-level=moderate
       - name: Lint
         run: npm run lint
       - name: Format check
@@ -46,8 +46,8 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit dependencies including build tooling
+        run: npm audit --audit-level=moderate
       - name: Lint
         run: npm run lint
       - name: Format check
