@@ -4,6 +4,10 @@ Standalone federated module for Robin Admin with its own frontend runtime and ex
 
 ## Local usage
 
+Use Node.js 22.23.4+, 24.22.1+, or 26.12.1+ on a supported release line.
+Docker builds and CI use Node.js 26.12.1, which includes the
+[October 2026 security fixes](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+
 Hosted mode requires both the proxy secret and a request-bound Ed25519 assertion.
 Verified browser identities include immutable `uid`; API keys have separate
 principals and must not inherit creator grants. Unsigned identity headers are
