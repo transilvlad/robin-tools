@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "lucide-react": "^1.61.0",
-    "pako": "^3.0.2",
+    "pako": "^3.0.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
