@@ -38,6 +38,7 @@
     "typescript-eslint": "^8.72.1"
   },
   "overrides": {
+    "minimatch": "^11.0.3",
     "qs": "^6.16.0"
   },
   "engines": {
