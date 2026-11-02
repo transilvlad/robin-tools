@@ -17,7 +17,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "express": "^5.3.0",
-    "express-rate-limit": "^8.7.1",
+    "express-rate-limit": "^8.7.2",
     "ipaddr.js": "^2.3.0",
     "jose": "^6.2.13",
     "pg": "^8.23.1",
