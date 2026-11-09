@@ -1,7 +1,7 @@
 {
   "name": "robin-tools",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.1.0",
   "type": "module",
   "description": "Robin Tools standalone federated app",
   "license": "Apache-2.0",
