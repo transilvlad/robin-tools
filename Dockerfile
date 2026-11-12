@@ -14,7 +14,7 @@ COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.jso
 COPY src ./src
 RUN npm run build
 
-FROM nginx:1.31.8-alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606
+FROM nginx:1.31.8-alpine@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
 
 RUN apk upgrade --no-cache \
     && apk add --no-cache "libexpat>=2.9.0-r0" 'pcre2>=10.49-r0' 'tiff>=4.7.2-r0' 'curl>=8.23.0-r0' 'libcurl>=8.23.0-r0' libcap \
