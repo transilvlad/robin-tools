@@ -4,8 +4,16 @@ interface ApiEnvelope<T> {
   error?: string;
 }
 
-let csrfToken: string | null = null;
+const csrfTokens = new Map<string, string | null>();
 const API_TIMEOUT_MS = 15_000;
+
+// The CSRF endpoint lives at the host API root, next to the module API base
+// the host passes in. Robin Admin served under /admin/ passes
+// /admin/api/modules/robin-tools, so the token is at /admin/api/auth/csrf.
+export function csrfUrlFor(basePath: string): string {
+  const apiRoot = /^(.*?\/api)(?:\/|$)/.exec(basePath)?.[1] ?? '/api';
+  return `${apiRoot}/auth/csrf`;
+}
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
@@ -50,12 +58,17 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   }
 }
 
-async function ensureCsrfToken(signal?: AbortSignal | null): Promise<string | null> {
-  if (csrfToken) {
-    return csrfToken;
+async function ensureCsrfToken(
+  basePath: string,
+  signal?: AbortSignal | null
+): Promise<string | null> {
+  const url = csrfUrlFor(basePath);
+  const cached = csrfTokens.get(url);
+  if (cached) {
+    return cached;
   }
 
-  const response = await fetchWithTimeout('/api/auth/csrf', {
+  const response = await fetchWithTimeout(url, {
     credentials: 'include',
     signal: signal ?? undefined,
   });
@@ -63,8 +76,9 @@ async function ensureCsrfToken(signal?: AbortSignal | null): Promise<string | nu
   if (!response.ok || !payload.success) {
     throw new Error(payload.error || `Unable to prepare request: ${response.status}`);
   }
-  csrfToken = payload.data?.csrfToken ?? null;
-  return csrfToken;
+  const token = payload.data?.csrfToken ?? null;
+  csrfTokens.set(url, token);
+  return token;
 }
 
 export async function moduleApiFetch<T>(
@@ -83,7 +97,7 @@ export async function moduleApiFetch<T>(
   }
 
   if (unsafe && useCsrf) {
-    const token = await ensureCsrfToken(init?.signal);
+    const token = await ensureCsrfToken(basePath, init?.signal);
     if (token) {
       headers.set('X-CSRF-Token', token);
     }

@@ -1,5 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { moduleApiFetch } from './moduleApi';
+import { csrfUrlFor, moduleApiFetch } from './moduleApi';
+
+describe('csrfUrlFor', () => {
+  it('uses the API root of the module base path', () => {
+    expect(csrfUrlFor('/api/modules/robin-tools')).toBe('/api/auth/csrf');
+    expect(csrfUrlFor('/admin/api/modules/robin-tools')).toBe('/admin/api/auth/csrf');
+    expect(csrfUrlFor('/api')).toBe('/api/auth/csrf');
+    expect(csrfUrlFor('https://admin.example.com/admin/api/modules/robin-tools')).toBe(
+      'https://admin.example.com/admin/api/auth/csrf'
+    );
+  });
+});
 
 describe('moduleApiFetch', () => {
   beforeEach(() => {
@@ -57,6 +68,35 @@ describe('moduleApiFetch', () => {
     const headers = fetchMock.mock.calls[1][1]?.headers as Headers;
     expect(headers.get('x-csrf-token')).toBe('csrf-test');
     expect(fetchMock.mock.calls[1][0]).toBe('/api/modules/robin-tools/history');
+  });
+
+  it('fetches CSRF state from the host API root when served under a path prefix', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { csrfToken: 'csrf-prefixed' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { id: 2 } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      );
+
+    await expect(
+      moduleApiFetch<{ id: number }>('/admin/api/modules/robin-tools', '/history', {
+        method: 'POST',
+        body: '{}',
+      })
+    ).resolves.toEqual({ id: 2 });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/admin/api/auth/csrf');
+    expect(fetchMock.mock.calls[1][0]).toBe('/admin/api/modules/robin-tools/history');
+    const headers = fetchMock.mock.calls[1][1]?.headers as Headers;
+    expect(headers.get('x-csrf-token')).toBe('csrf-prefixed');
   });
 
   it('reports malformed JSON without leaking response contents', async () => {
