@@ -17,7 +17,7 @@ RUN npm run build
 FROM nginx:1.31.8-alpine@sha256:fed7e14be83cbd2661a75cdc5b872d936cf155d46c327084d30b8df19ae88d72
 
 RUN apk upgrade --no-cache \
-    && apk add --no-cache "libexpat>=2.9.0-r0" 'pcre2>=10.49-r0' 'tiff>=4.7.2-r0' 'curl>=8.23.0-r0' 'libcurl>=8.23.0-r0' 'libxslt>=1.1.43-r4' libcap \
+    && apk add --no-cache "libexpat>=2.9.0-r0" 'pcre2>=10.49-r0' 'tiff>=4.7.2-r0' 'curl>=8.23.0-r0' 'libcurl>=8.23.0-r0' 'libxslt>=1.1.43-r4' 'libxml2>=2.13.9-r3' libcap \
     && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx \
     && touch /run/nginx.pid \
     && chown -R nginx:nginx /var/cache/nginx /run/nginx.pid /etc/nginx/conf.d
